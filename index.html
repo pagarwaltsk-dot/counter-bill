@@ -43,6 +43,14 @@
   @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.6);opacity:.4}}
   @media (prefers-reduced-motion:reduce){.key.live .dot{animation:none}}
 
+  .picks{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px}
+  .picks button{padding:12px 6px;border:1px solid var(--rule);background:var(--card);
+    border-radius:2px;font-family:var(--sans);font-size:12.5px;font-weight:500;
+    color:var(--ink);cursor:pointer;line-height:1.25;text-align:left}
+  .picks button:active{background:var(--ink);color:#fff}
+  .picks button span{display:block;font-family:var(--mono);font-size:9.5px;
+    letter-spacing:.08em;color:var(--ink-soft);margin-top:3px}
+  .picks button:active span{color:#fff}
   .modes{display:flex;gap:6px;margin-top:8px}
   .modes button{flex:1;padding:7px 4px;border:1px solid var(--rule);background:var(--card);
     border-radius:2px;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;
@@ -108,10 +116,13 @@
     <button data-list="RETAIL"    aria-pressed="false">RETAIL</button>
   </div>
 
+  <div class="picks" id="picks" hidden></div>
+
   <button class="key" id="key"><span class="dot"></span><span id="keytext">Hold to talk</span></button>
   <div class="modes" id="modes">
     <button data-mode="hold" aria-pressed="true">Hold to talk</button>
     <button data-mode="free" aria-pressed="false">Hands-free</button>
+    <button id="review" aria-pressed="false">Review first</button>
   </div>
   <div class="heard" id="heard">Say: two kg sugar · maggi five · sugar rate 45 · remove maggi</div>
 
@@ -262,6 +273,7 @@ function send(text){
 
 /* --- speech ---------------------------------------------------------- */
 var mode = localStorage.getItem('cb_mode') || 'hold';
+var review = localStorage.getItem('cb_review') === '1';
 var processed = 0, buffer = [], flushTimer = null, lastSent = '', lastAt = 0, holding = false;
 
 function collect(t){
@@ -276,7 +288,14 @@ function flushSpeech(){
   var text = buffer.join(' ').trim();
   buffer = [];
   clearTimeout(flushTimer);
-  if(text) send(text);
+  if(!text) return;
+  if(review){                       // noisy shop: check it before it hits the bill
+    $('typed').value = text;
+    $('heard').textContent = 'Check it, then tap Add';
+    $('typed').focus();
+    return;
+  }
+  send(text);
 }
 
 function startRecog(){
@@ -344,6 +363,23 @@ function setMode(m){
   setLive(false);
 }
 
+function loadPicks(){
+  call({ favs: 1 }, function(d){
+    if(!d || !d.favs || !d.favs.length) return;
+    $('picks').hidden = false;
+    $('picks').innerHTML = d.favs.map(function(f){
+      return '<button data-name="' + esc(f.name) + '">' + esc(f.name) +
+             '<span>+1 ' + esc(f.uom || '') + '</span></button>';
+    }).join('');
+  });
+}
+
+$('picks').addEventListener('click', function(e){
+  var b = e.target.closest('button');
+  if(!b) return;
+  call({ add: b.dataset.name, qty: 1 });
+});
+
 /* --- wiring ---------------------------------------------------------- */
 $('connect').onclick = function(){
   base = $('url').value.trim();
@@ -353,8 +389,14 @@ $('connect').onclick = function(){
   localStorage.setItem('cb_key', wkey);
   $('setup').classList.add('done');
   call({ state: 1 });
+  loadPicks();
 };
 $('reset').onclick = function(){ $('setup').classList.remove('done'); };
+$('review').onclick = function(){
+  review = !review;
+  localStorage.setItem('cb_review', review ? '1' : '0');
+  $('review').setAttribute('aria-pressed', review ? 'true' : 'false');
+};
 $('key').addEventListener('pointerdown', function(e){
   if(mode !== 'hold') return;
   e.preventDefault();
@@ -403,11 +445,13 @@ $('pdf').onclick    = function(){
 };
 
 setMode(mode);
+$('review').setAttribute('aria-pressed', review ? 'true' : 'false');
 
 if(base && wkey){
   $('url').value = base; $('wkey').value = wkey;
   $('setup').classList.add('done');
   call({ state: 1 });
+  loadPicks();
 }
 </script>
 </body>
