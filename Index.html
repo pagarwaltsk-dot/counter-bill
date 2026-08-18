@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Counter Bill — mic</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#12212F; --ink-soft:#5A6B7B; --paper:#FBFAF7; --card:#FFFFFF;
+    --rule:#DCE1E6; --live:#D62246; --ok:#0E7C66; --amber:#F0B429;
+    --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+    --sans:'Space Grotesk',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+       font-size:15px;line-height:1.4;padding:16px}
+  .wrap{max-width:520px;margin:0 auto}
+  h1{font-size:13px;letter-spacing:.14em;text-transform:uppercase;margin:0 0 2px;color:var(--ink-soft)}
+  .inv{font-family:var(--mono);font-size:20px;font-weight:600;margin-bottom:12px}
+  .inv small{font-family:var(--sans);font-size:12px;color:var(--ink-soft);font-weight:500}
+
+  .setup{background:var(--card);border:1px solid var(--rule);border-radius:2px;padding:12px;margin-bottom:14px}
+  .setup label{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink-soft);margin:0 0 4px}
+  .setup input{margin-bottom:8px}
+  .setup.done{display:none}
+
+  .lists{display:flex;gap:6px;margin-bottom:14px}
+  .lists button{flex:1;padding:10px 4px;border:1px solid var(--rule);background:var(--card);
+    border-radius:2px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;
+    color:var(--ink-soft);cursor:pointer}
+  .lists button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+  .key{width:100%;border:0;border-radius:2px;background:var(--ink);color:#fff;
+    padding:26px 16px;font-family:var(--sans);font-size:17px;font-weight:700;
+    letter-spacing:.04em;cursor:pointer}
+  .key:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+  .key .dot{display:inline-block;width:11px;height:11px;border-radius:50%;
+    background:#fff;opacity:.35;margin-right:10px;vertical-align:middle}
+  .key.live{background:var(--live)}
+  .key.live .dot{opacity:1;animation:pulse 1.1s infinite}
+  @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.6);opacity:.4}}
+  @media (prefers-reduced-motion:reduce){.key.live .dot{animation:none}}
+
+  .heard{font-family:var(--mono);font-size:12px;color:var(--ink-soft);min-height:18px;margin:8px 2px 12px}
+  .row{display:flex;gap:6px;margin-bottom:12px}
+  input,select{font-family:var(--mono);font-size:14px;padding:11px 10px;border:1px solid var(--rule);
+    background:var(--card);border-radius:2px;color:var(--ink);width:100%}
+  input:focus,select:focus{outline:2px solid var(--ink);outline-offset:-1px}
+  .send{border:1px solid var(--ink);background:var(--ink);color:#fff;padding:11px 16px;
+    border-radius:2px;cursor:pointer;font-weight:700}
+
+  .tape{background:var(--card);border:1px solid var(--rule);border-radius:2px;padding:12px}
+  .tape h2{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 8px}
+  .line{display:grid;grid-template-columns:1fr auto;gap:8px;font-family:var(--mono);
+    font-size:12.5px;padding:9px 0;border-bottom:1px dotted var(--rule);cursor:pointer}
+  .line:hover{background:#F4F6F8}
+  .line span:last-child{font-weight:600}
+  .line em{font-style:normal;color:var(--ink-soft)}
+  .line.open{background:#F4F6F8;border-bottom:0}
+  .edit{background:#F4F6F8;border-bottom:1px dotted var(--rule);padding:10px 8px 12px}
+  .edit .fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
+  .edit label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--ink-soft);margin-bottom:3px}
+  .edit input{padding:9px 8px;font-size:15px;text-align:right}
+  .edit .btns{display:flex;gap:6px}
+  .edit button{flex:1;padding:10px;border-radius:2px;font-weight:700;cursor:pointer;
+    border:1px solid var(--ink);background:var(--ink);color:#fff}
+  .edit button.del{background:var(--card);color:var(--live);border-color:var(--live)}
+  .empty{font-family:var(--mono);font-size:12px;color:var(--ink-soft);padding:6px 0}
+  .total{display:flex;justify-content:space-between;align-items:baseline;margin-top:10px;
+    padding-top:10px;border-top:2px solid var(--ink);font-family:var(--mono)}
+  .total b{font-size:24px}
+
+  .log{margin:12px 0 0;font-family:var(--mono);font-size:12px;color:var(--ink-soft)}
+  .log div{padding:4px 0;border-bottom:1px dotted var(--rule)}
+  .log .good{color:var(--ok)} .log .bad{color:var(--live)}
+  .actions{display:flex;gap:6px;margin-top:12px}
+  .actions button{flex:1;padding:13px;border:1px solid var(--ink);background:var(--card);
+    color:var(--ink);border-radius:2px;font-weight:700;cursor:pointer}
+  .actions .primary{background:var(--ok);border-color:var(--ok);color:#fff}
+  .reset{margin-top:16px;background:none;border:0;color:var(--ink-soft);
+    font-family:var(--mono);font-size:11px;text-decoration:underline;cursor:pointer;padding:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Counter bill</h1>
+  <div class="inv"><span id="invno">—</span> <small id="cust"></small></div>
+
+  <div class="setup" id="setup">
+    <label for="url">Web app URL (ends in /exec)</label>
+    <input id="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+    <label for="wkey">Web key (Settings sheet)</label>
+    <input id="wkey" placeholder="10-character key" autocomplete="off">
+    <button class="send" id="connect" style="width:100%">Connect</button>
+  </div>
+
+  <div class="lists" id="lists">
+    <button data-list="MASTER"    aria-pressed="false">MASTER</button>
+    <button data-list="WHOLESALE" aria-pressed="false">WHOLESALE</button>
+    <button data-list="RETAIL"    aria-pressed="false">RETAIL</button>
+  </div>
+
+  <button class="key" id="key"><span class="dot"></span><span id="keytext">Start listening</span></button>
+  <div class="heard" id="heard">Say: two kg sugar · maggi five · sugar rate 45 · remove maggi</div>
+
+  <div class="row">
+    <input id="typed" placeholder="or type a command" autocomplete="off">
+    <button class="send" id="send">Add</button>
+  </div>
+
+  <div class="row">
+    <select id="lang">
+      <option value="en-IN">English (India)</option>
+      <option value="hi-IN">हिन्दी</option>
+      <option value="bn-IN">বাংলা</option>
+      <option value="as-IN">অসমীয়া</option>
+      <option value="en-US">English (US)</option>
+    </select>
+  </div>
+
+  <div class="tape">
+    <h2>On this bill — tap a line to edit</h2>
+    <div id="lines"><div class="empty">No items yet.</div></div>
+    <div class="total"><span>TOTAL</span><b id="total">₹0.00</b></div>
+  </div>
+
+  <div class="actions">
+    <button id="newinv">New invoice</button>
+    <button id="pdf">PDF</button>
+    <button id="save" class="primary">Save invoice</button>
+  </div>
+
+  <div class="log" id="log"></div>
+  <button class="reset" id="reset">Change web app URL or key</button>
+</div>
+
+<script>
+var recog = null, listening = false;
+var base = localStorage.getItem('cb_url') || '';
+var wkey = localStorage.getItem('cb_key') || '';
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? '' : s).replace(/[<>&]/g, function(c){
+  return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c]; }); }
+
+/* JSONP — the sheet lives on another origin, and Apps Script redirects
+   normal fetch() calls, so a script tag is the reliable channel. */
+function call(params, handler){
+  if(!base || !wkey){ log('Connect to your sheet first.'); return; }
+  var name = 'cb_' + Math.random().toString(36).slice(2);
+  var s = document.createElement('script');
+  var t = setTimeout(function(){ log('No answer from the sheet — check the URL and that access is set to Anyone.'); cleanup(); }, 20000);
+  function cleanup(){ clearTimeout(t); delete window[name]; if(s.parentNode) s.parentNode.removeChild(s); }
+  window[name] = function(data){ cleanup(); (handler || render)(data); };
+  var qs = Object.keys(params).map(function(k){
+    return k + '=' + encodeURIComponent(params[k]); }).join('&');
+  s.src = base + '?key=' + encodeURIComponent(wkey) + '&callback=' + name + '&' + qs;
+  s.onerror = function(){ log('Could not reach the sheet.'); cleanup(); };
+  document.body.appendChild(s);
+}
+
+var openRow = null;   // which line's editor is showing
+
+function render(state){
+  if(!state) return;
+  $('invno').textContent = state.invoiceNo || '—';
+  $('cust').textContent  = state.customer ? '· ' + state.customer : '';
+  $('total').textContent = '₹' + Number(state.total || 0).toFixed(2);
+  var box = $('lines');
+  if(!state.lines || !state.lines.length){
+    box.innerHTML = '<div class="empty">No items yet.</div>';
+    openRow = null;
+  } else {
+    box.innerHTML = state.lines.map(function(l){
+      var open = (l.row === openRow);
+      return '<div class="line' + (open ? ' open' : '') + '" data-row="' + l.row + '">' +
+             '<span>' + esc(l.name) + ' <em>' + Number(l.qty) + ' ' + esc(l.uom || '') +
+             ' × ' + Number(l.rate).toFixed(2) + '</em></span>' +
+             '<span>' + Number(l.amt || 0).toFixed(2) + '</span></div>' +
+             '<div class="edit" data-edit="' + l.row + '"' + (open ? '' : ' hidden') + '>' +
+               '<div class="fields">' +
+                 field('Qty',    'qty',  l.qty) +
+                 field('Rate ₹', 'rate', l.rate) +
+                 field('Disc %', 'disc', l.disc || 0) +
+               '</div>' +
+               '<div class="btns">' +
+                 '<button class="upd" data-row="' + l.row + '">Update</button>' +
+                 '<button class="del" data-row="' + l.row + '">Remove</button>' +
+               '</div>' +
+             '</div>';
+    }).join('');
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('#lists button'), function(b){
+    b.setAttribute('aria-pressed', b.dataset.list === state.list ? 'true' : 'false');
+  });
+  if(state.msg) log(state.msg);
+}
+
+function field(label, key, value){
+  return '<div><label>' + label + '</label>' +
+         '<input type="number" step="any" inputmode="decimal" data-f="' + key + '" value="' +
+         Number(value || 0) + '"></div>';
+}
+
+/* tap a line to open its editor; buttons inside it edit or remove the line */
+$('lines').addEventListener('click', function(e){
+  var upd = e.target.closest('.upd');
+  if(upd){
+    var row = Number(upd.dataset.row);
+    var box = document.querySelector('[data-edit="' + row + '"]');
+    var p = { row: row };
+    Array.prototype.forEach.call(box.querySelectorAll('input'), function(i){ p[i.dataset.f] = i.value; });
+    openRow = null;
+    call(p);
+    return;
+  }
+  var del = e.target.closest('.del');
+  if(del){ openRow = null; call({ row: Number(del.dataset.row), del: 1 }); return; }
+
+  var line = e.target.closest('.line');
+  if(line){
+    var r = Number(line.dataset.row);
+    openRow = (openRow === r) ? null : r;
+    var ed = document.querySelector('[data-edit="' + r + '"]');
+    Array.prototype.forEach.call(document.querySelectorAll('.edit'), function(x){ x.hidden = true; });
+    Array.prototype.forEach.call(document.querySelectorAll('.line'), function(x){ x.classList.remove('open'); });
+    if(openRow){ ed.hidden = false; line.classList.add('open'); ed.querySelector('input').focus(); }
+  }
+});
+
+function log(msg){
+  var d = document.createElement('div');
+  d.className = /not on|not in|\?|full|Nothing|Error|Wrong|Could not|No answer/.test(msg) ? 'bad' : 'good';
+  d.textContent = msg;
+  $('log').insertBefore(d, $('log').firstChild);
+  while($('log').children.length > 8) $('log').removeChild($('log').lastChild);
+}
+
+function send(text){
+  if(!text || !text.trim()) return;
+  $('heard').textContent = '“' + text + '”';
+  call({ cmd: text.trim() });
+}
+
+/* --- speech ---------------------------------------------------------- */
+function startListening(){
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){ log('This browser has no speech input. Use Chrome, or type the command.'); return; }
+  recog = new SR();
+  recog.lang = $('lang').value;
+  recog.continuous = true;
+  recog.interimResults = true;
+  recog.onresult = function(ev){
+    var interim = '';
+    for(var i = ev.resultIndex; i < ev.results.length; i++){
+      var t = ev.results[i][0].transcript;
+      if(ev.results[i].isFinal) send(t.trim()); else interim += t;
+    }
+    if(interim) $('heard').textContent = interim;
+  };
+  recog.onerror = function(ev){
+    log(ev.error === 'not-allowed'
+      ? 'Mic blocked. Tap the lock icon in the address bar and allow the microphone.'
+      : 'Mic: ' + ev.error);
+    stopListening();
+  };
+  recog.onend = function(){ if(listening){ try{ recog.start(); }catch(e){} } };
+  try { recog.start(); } catch(e){ log('Mic could not start: ' + e.message); return; }
+  listening = true;
+  $('key').classList.add('live');
+  $('keytext').textContent = 'Listening — tap to stop';
+}
+
+function stopListening(){
+  listening = false;
+  if(recog){ try{ recog.stop(); }catch(e){} }
+  $('key').classList.remove('live');
+  $('keytext').textContent = 'Start listening';
+}
+
+/* --- wiring ---------------------------------------------------------- */
+$('connect').onclick = function(){
+  base = $('url').value.trim();
+  wkey = $('wkey').value.trim();
+  if(!/\/exec$/.test(base)){ log('The URL must end in /exec.'); return; }
+  localStorage.setItem('cb_url', base);
+  localStorage.setItem('cb_key', wkey);
+  $('setup').classList.add('done');
+  call({ state: 1 });
+};
+$('reset').onclick = function(){ $('setup').classList.remove('done'); };
+$('key').onclick = function(){ listening ? stopListening() : startListening(); };
+$('send').onclick = function(){ send($('typed').value); $('typed').value = ''; };
+$('typed').addEventListener('keydown', function(e){
+  if(e.key === 'Enter'){ send($('typed').value); $('typed').value = ''; }
+});
+Array.prototype.forEach.call(document.querySelectorAll('#lists button'), function(b){
+  b.onclick = function(){ send('price list ' + b.dataset.list); };
+});
+$('newinv').onclick = function(){ openRow = null; send('new bill'); };
+$('save').onclick   = function(){ openRow = null; send('save'); };
+$('pdf').onclick    = function(){
+  log('Building PDF…');
+  call({ pdf: 1 }, function(d){
+    if(!d || d.error){ log(d && d.error ? d.error : 'PDF failed.'); return; }
+    try{
+      var bin = atob(d.b64), arr = new Uint8Array(bin.length);
+      for(var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      var blob = new Blob([arr], { type: 'application/pdf' });
+      var u = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = u; a.download = d.name; a.target = '_blank';
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ URL.revokeObjectURL(u); a.parentNode.removeChild(a); }, 2000);
+      log('PDF ready: ' + d.name + (d.url ? ' (also saved to Drive)' : ''));
+    }catch(err){ log('Could not open the PDF: ' + err.message); }
+  });
+};
+
+if(base && wkey){
+  $('url').value = base; $('wkey').value = wkey;
+  $('setup').classList.add('done');
+  call({ state: 1 });
+}
+</script>
+</body>
+</html>
