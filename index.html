@@ -43,6 +43,11 @@
   @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.6);opacity:.4}}
   @media (prefers-reduced-motion:reduce){.key.live .dot{animation:none}}
 
+  .modes{display:flex;gap:6px;margin-top:8px}
+  .modes button{flex:1;padding:7px 4px;border:1px solid var(--rule);background:var(--card);
+    border-radius:2px;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--ink-soft);cursor:pointer}
+  .modes button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
   .heard{font-family:var(--mono);font-size:12px;color:var(--ink-soft);min-height:18px;margin:8px 2px 12px}
   .row{display:flex;gap:6px;margin-bottom:12px}
   input,select{font-family:var(--mono);font-size:14px;padding:11px 10px;border:1px solid var(--rule);
@@ -60,7 +65,7 @@
   .line em{font-style:normal;color:var(--ink-soft)}
   .line.open{background:#F4F6F8;border-bottom:0}
   .edit{background:#F4F6F8;border-bottom:1px dotted var(--rule);padding:10px 8px 12px}
-  .edit .fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
+  .edit .fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
   .edit label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;
     text-transform:uppercase;color:var(--ink-soft);margin-bottom:3px}
   .edit input{padding:9px 8px;font-size:15px;text-align:right}
@@ -103,7 +108,11 @@
     <button data-list="RETAIL"    aria-pressed="false">RETAIL</button>
   </div>
 
-  <button class="key" id="key"><span class="dot"></span><span id="keytext">Start listening</span></button>
+  <button class="key" id="key"><span class="dot"></span><span id="keytext">Hold to talk</span></button>
+  <div class="modes" id="modes">
+    <button data-mode="hold" aria-pressed="true">Hold to talk</button>
+    <button data-mode="free" aria-pressed="false">Hands-free</button>
+  </div>
   <div class="heard" id="heard">Say: two kg sugar · maggi five · sugar rate 45 · remove maggi</div>
 
   <div class="row">
@@ -184,7 +193,6 @@ function render(state){
                '<div class="fields">' +
                  field('Qty',    'qty',  l.qty) +
                  field('Rate ₹', 'rate', l.rate) +
-                 field('Disc %', 'disc', l.disc || 0) +
                '</div>' +
                '<div class="btns">' +
                  '<button class="upd" data-row="' + l.row + '">Update</button>' +
@@ -253,27 +261,27 @@ function send(text){
 }
 
 /* --- speech ---------------------------------------------------------- */
-var processed = 0, buffer = [], flushTimer = null, lastSent = '', lastAt = 0;
+var mode = localStorage.getItem('cb_mode') || 'hold';
+var processed = 0, buffer = [], flushTimer = null, lastSent = '', lastAt = 0, holding = false;
 
-function queueSpeech(t){
+function collect(t){
   t = String(t || '').trim();
   if(!t) return;
   if(buffer.length && buffer[buffer.length - 1].toLowerCase() === t.toLowerCase()) return;
   buffer.push(t);
   $('heard').textContent = buffer.join(' ') + ' …';
-  clearTimeout(flushTimer);
-  flushTimer = setTimeout(flushSpeech, 1100);
 }
 
 function flushSpeech(){
   var text = buffer.join(' ').trim();
   buffer = [];
+  clearTimeout(flushTimer);
   if(text) send(text);
 }
 
-function startListening(){
+function startRecog(){
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!SR){ log('This browser has no speech input. Use Chrome, or type the command.'); return; }
+  if(!SR){ log('This browser has no speech input. Use Chrome, or type the command.'); return false; }
   recog = new SR();
   recog.lang = $('lang').value;
   recog.continuous = true;
@@ -285,7 +293,8 @@ function startListening(){
       if(ev.results[i].isFinal){
         if(i < processed) continue;
         processed = i + 1;
-        queueSpeech(ev.results[i][0].transcript);
+        collect(ev.results[i][0].transcript);
+        if(mode === 'free'){ clearTimeout(flushTimer); flushTimer = setTimeout(flushSpeech, 1100); }
       } else {
         interim += ev.results[i][0].transcript;
       }
@@ -293,25 +302,46 @@ function startListening(){
     if(interim && !buffer.length) $('heard').textContent = interim;
   };
   recog.onerror = function(ev){
+    if(ev.error === 'no-speech') return;
     log(ev.error === 'not-allowed'
       ? 'Mic blocked. Tap the lock icon in the address bar and allow the microphone.'
       : 'Mic: ' + ev.error);
     stopListening();
   };
-  recog.onend = function(){ if(listening){ try{ recog.start(); }catch(e){} } };
-  try { recog.start(); } catch(e){ log('Mic could not start: ' + e.message); return; }
+  recog.onend = function(){
+    if(mode === 'hold'){ flushSpeech(); setLive(false); listening = false; return; }
+    if(listening){ try{ recog.start(); }catch(e){} }
+  };
+  try { recog.start(); } catch(e){ log('Mic could not start: ' + e.message); return false; }
   listening = true;
-  $('key').classList.add('live');
-  $('keytext').textContent = 'Listening — tap to stop';
+  setLive(true);
+  return true;
+}
+
+function setLive(on){
+  $('key').classList.toggle('live', !!on);
+  $('keytext').textContent = on
+    ? (mode === 'hold' ? 'Listening — release to send' : 'Listening — tap to stop')
+    : (mode === 'hold' ? 'Hold to talk' : 'Start listening');
 }
 
 function stopListening(){
   listening = false;
+  holding = false;
   clearTimeout(flushTimer);
   buffer = [];
   if(recog){ try{ recog.stop(); }catch(e){} }
-  $('key').classList.remove('live');
-  $('keytext').textContent = 'Start listening';
+  setLive(false);
+}
+
+function setMode(m){
+  stopListening();
+  mode = m;
+  localStorage.setItem('cb_mode', m);
+  Array.prototype.forEach.call(document.querySelectorAll('#modes button'), function(b){
+    b.setAttribute('aria-pressed', b.dataset.mode === m ? 'true' : 'false');
+  });
+  setLive(false);
 }
 
 /* --- wiring ---------------------------------------------------------- */
@@ -325,7 +355,26 @@ $('connect').onclick = function(){
   call({ state: 1 });
 };
 $('reset').onclick = function(){ $('setup').classList.remove('done'); };
-$('key').onclick = function(){ listening ? stopListening() : startListening(); };
+$('key').addEventListener('pointerdown', function(e){
+  if(mode !== 'hold') return;
+  e.preventDefault();
+  holding = true;
+  startRecog();
+});
+['pointerup','pointercancel','pointerleave'].forEach(function(evt){
+  $('key').addEventListener(evt, function(){
+    if(mode !== 'hold' || !holding) return;
+    holding = false;
+    if(recog){ try{ recog.stop(); }catch(e){} }   // onend flushes and sends
+  });
+});
+$('key').addEventListener('click', function(){
+  if(mode !== 'free') return;
+  listening ? stopListening() : startRecog();
+});
+Array.prototype.forEach.call(document.querySelectorAll('#modes button'), function(b){
+  b.onclick = function(){ setMode(b.dataset.mode); };
+});
 $('send').onclick = function(){ send($('typed').value); $('typed').value = ''; };
 $('typed').addEventListener('keydown', function(e){
   if(e.key === 'Enter'){ send($('typed').value); $('typed').value = ''; }
@@ -352,6 +401,8 @@ $('pdf').onclick    = function(){
     }catch(err){ log('Could not open the PDF: ' + err.message); }
   });
 };
+
+setMode(mode);
 
 if(base && wkey){
   $('url').value = base; $('wkey').value = wkey;
