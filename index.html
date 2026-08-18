@@ -241,11 +241,36 @@ function log(msg){
 
 function send(text){
   if(!text || !text.trim()) return;
+  text = text.trim();
+  var now = Date.now();
+  if(text.toLowerCase() === lastSent.toLowerCase() && now - lastAt < 4000){
+    log('Ignored repeat: ' + text);
+    return;
+  }
+  lastSent = text; lastAt = now;
   $('heard').textContent = '“' + text + '”';
-  call({ cmd: text.trim() });
+  call({ cmd: text });
 }
 
 /* --- speech ---------------------------------------------------------- */
+var processed = 0, buffer = [], flushTimer = null, lastSent = '', lastAt = 0;
+
+function queueSpeech(t){
+  t = String(t || '').trim();
+  if(!t) return;
+  if(buffer.length && buffer[buffer.length - 1].toLowerCase() === t.toLowerCase()) return;
+  buffer.push(t);
+  $('heard').textContent = buffer.join(' ') + ' …';
+  clearTimeout(flushTimer);
+  flushTimer = setTimeout(flushSpeech, 1100);
+}
+
+function flushSpeech(){
+  var text = buffer.join(' ').trim();
+  buffer = [];
+  if(text) send(text);
+}
+
 function startListening(){
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SR){ log('This browser has no speech input. Use Chrome, or type the command.'); return; }
@@ -253,13 +278,19 @@ function startListening(){
   recog.lang = $('lang').value;
   recog.continuous = true;
   recog.interimResults = true;
+  recog.onstart = function(){ processed = 0; buffer = []; };
   recog.onresult = function(ev){
     var interim = '';
     for(var i = ev.resultIndex; i < ev.results.length; i++){
-      var t = ev.results[i][0].transcript;
-      if(ev.results[i].isFinal) send(t.trim()); else interim += t;
+      if(ev.results[i].isFinal){
+        if(i < processed) continue;
+        processed = i + 1;
+        queueSpeech(ev.results[i][0].transcript);
+      } else {
+        interim += ev.results[i][0].transcript;
+      }
     }
-    if(interim) $('heard').textContent = interim;
+    if(interim && !buffer.length) $('heard').textContent = interim;
   };
   recog.onerror = function(ev){
     log(ev.error === 'not-allowed'
@@ -276,6 +307,8 @@ function startListening(){
 
 function stopListening(){
   listening = false;
+  clearTimeout(flushTimer);
+  buffer = [];
   if(recog){ try{ recog.stop(); }catch(e){} }
   $('key').classList.remove('live');
   $('keytext').textContent = 'Start listening';
